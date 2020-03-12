@@ -245,7 +245,7 @@ func GetFor(c *gin.Context, t gtype.Type) (CurrentRatings, error) {
 
 	q := datastore.NewQuery(crKind).
 		Ancestor(user.RootKey(c)).
-		Filter("Type=", t).
+		Filter("Type=", int(t)).
 		Order("-Low")
 
 	var rs CurrentRatings
@@ -326,7 +326,7 @@ func getFiltered(c *gin.Context, t gtype.Type, leader bool, offset, limit int32)
 	}
 
 	if t != gtype.NoType {
-		q = q.Filter("Type=", t)
+		q = q.Filter("Type=", int(t))
 	}
 
 	var cnt int64
