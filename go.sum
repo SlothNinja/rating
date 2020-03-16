@@ -54,6 +54,8 @@ github.com/SlothNinja/type v0.0.0-20200229193321-83a182ab5697 h1:ewnbt81aMVfhkGz
 github.com/SlothNinja/type v0.0.0-20200229193321-83a182ab5697/go.mod h1:9SvSNZQIKtv68lMBMZzuPeZwFO6Q4GvfhD25IJq+v1s=
 github.com/SlothNinja/user v0.0.0-20200229182312-c613bd4e3bca h1:uhm8xtJiuQjG+R9hE3B9DdcRcD4Iwv+3CawMrYv3oPs=
 github.com/SlothNinja/user v0.0.0-20200229182312-c613bd4e3bca/go.mod h1:Ov5JQEEZADn1uO2biJssvJSU2ummRNDxp93NnRvQ0w0=
+github.com/SlothNinja/user v0.0.0-20200316001319-fa6de0ac8141 h1:zVR+fztVSKV/L4TBni/qr/YkmfT8rOZ2ZlYtc4qbtcQ=
+github.com/SlothNinja/user v0.0.0-20200316001319-fa6de0ac8141/go.mod h1:sobCUGb2KbjYyzVsCXpxZfOucvwmJ607hZ14ftsTZLw=
 github.com/SlothNinja/user v0.0.4-alpha h1:Ik+zikqtm9wOeni6lXtmpreO96/CYdnrzfFIZ6ueodo=
 github.com/SlothNinja/user v0.0.4-alpha/go.mod h1:sobCUGb2KbjYyzVsCXpxZfOucvwmJ607hZ14ftsTZLw=
 github.com/boj/redistore v0.0.0-20180917114910-cd5dcc76aeff/go.mod h1:+RTT1BOk5P97fT2CiHkbFQwkK3mjsFAP6zCYV2aXtjw=
