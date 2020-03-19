@@ -304,12 +304,11 @@ func (rs CurrentRatings) Projected(c *gin.Context, cm contest.ContestMap) (Curre
 }
 
 func (r *CurrentRating) Projected(c *gin.Context, cs contest.Contests) (*CurrentRating, error) {
-	log.Debugf("Entering r.Projected")
-	defer log.Debugf("Exiting r.Projected")
+	log.Debugf("Entering")
+	defer log.Debugf("Exiting")
 
 	l := len(cs)
 	if l == 0 && r.generated {
-		log.Debugf("rating: %#v generated: %v", r, r.generated)
 		return r, nil
 	}
 
@@ -398,12 +397,8 @@ func (rs CurrentRatings) getUsers(c *gin.Context) (user.Users, error) {
 	us := make(user.Users, l)
 	ks := make([]*datastore.Key, l)
 	for i := range rs {
-		//log.Debugf("rs[i]: %#v", rs[i])
 		us[i] = user.New(c, 0)
-		// if ok := datastore.PopulateKey(us[i], rs[i].Parent); !ok {
-		// 	log.Debugf("Unable to populate user with key: %v", rs[i].Parent)
-		// 	return nil, fmt.Errorf("Unable to populate user with key.")
-		// }
+		ks[i] = rs[i].Key.Parent
 	}
 
 	err = dsClient.GetMulti(c, ks, us)
@@ -482,7 +477,6 @@ func Update(c *gin.Context) {
 			c.AbortWithStatus(http.StatusInternalServerError)
 		}
 
-		log.Debugf("k: %s", k)
 		tparams.Set("uid", fmt.Sprintf("%v", k.ID))
 		tk = taskqueue.NewPOSTTask(path, tparams)
 		tk.RetryOptions = &o
@@ -745,24 +739,21 @@ func JSONFilteredAction(c *gin.Context) {
 		log.Errorf("rating#getFiltered Error: %s", err)
 		return
 	}
-	log.Debugf("rs: %#v", rs)
 
 	us, err := rs.getUsers(c)
 	if err != nil {
 		log.Errorf("rating#getUsers Error: %s", err)
 		return
 	}
-	log.Debugf("us: %#v", us)
 
 	ps, err := rs.getProjected(c)
 	if err != nil {
 		log.Errorf("rating#getProjected Error: %s", err)
 		return
 	}
-	log.Debugf("ps: %#v", ps)
 
 	if data, err := toCombined(c, us, rs, ps, offset, cnt); err != nil {
-		log.Debugf("toCombined error: %v", err)
+		log.Errorf("toCombined error: %v", err)
 		c.JSON(http.StatusOK, fmt.Sprintf("%v", err))
 	} else {
 		c.JSON(http.StatusOK, data)
@@ -781,8 +772,8 @@ func (r *CurrentRating) String() string {
 }
 
 func singleUser(c *gin.Context, u *user.User, rs, ps CurrentRatings) (table *jCombinedRatingsIndex, err error) {
-	log.Debugf("Entering singleUser")
-	defer log.Debugf("Exiting singleUser")
+	log.Debugf("Entering")
+	defer log.Debugf("Exiting")
 
 	table = new(jCombinedRatingsIndex)
 	l1, l2 := len(rs), len(ps)
@@ -806,7 +797,7 @@ func singleUser(c *gin.Context, u *user.User, rs, ps CurrentRatings) (table *jCo
 
 	var draw int
 	if draw, err = strconv.Atoi(c.PostForm("draw")); err != nil {
-		log.Debugf("strconv.Atoi error: %v", err)
+		log.Errorf("strconv.Atoi error: %v", err)
 		return
 	}
 
