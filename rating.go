@@ -57,12 +57,48 @@ type Rating struct {
 	Common
 }
 
+func (r *Rating) Load(ps []datastore.Property) error {
+	return datastore.LoadStruct(r, ps)
+}
+
+func (r *Rating) Save() ([]datastore.Property, error) {
+	t := time.Now()
+	if r.CreatedAt.IsZero() {
+		r.CreatedAt = t
+	}
+	r.UpdatedAt = t
+	return datastore.SaveStruct(r)
+}
+
+func (r *Rating) LoadKey(k *datastore.Key) error {
+	r.Key = k
+	return nil
+}
+
 type CurrentRatings []*CurrentRating
 type CurrentRating struct {
 	// ID     string         `gae:"$id"`
 	// Parent *datastore.Key `gae:"$parent"`
 	Key *datastore.Key `datastore:"__key__"`
 	Common
+}
+
+func (r *CurrentRating) Load(ps []datastore.Property) error {
+	return datastore.LoadStruct(r, ps)
+}
+
+func (r *CurrentRating) Save() ([]datastore.Property, error) {
+	t := time.Now()
+	if r.CreatedAt.IsZero() {
+		r.CreatedAt = t
+	}
+	r.UpdatedAt = t
+	return datastore.SaveStruct(r)
+}
+
+func (r *CurrentRating) LoadKey(k *datastore.Key) error {
+	r.Key = k
+	return nil
 }
 
 type Common struct {
