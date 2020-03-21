@@ -1,10 +1,11 @@
 package rating
 
 import (
+	"context"
 	"fmt"
 	"html/template"
 	"net/http"
-	"net/url"
+	"os"
 	"strconv"
 	"time"
 
@@ -13,12 +14,14 @@ import (
 	"github.com/SlothNinja/glicko"
 	"github.com/SlothNinja/log"
 	"github.com/SlothNinja/restful"
+	"github.com/SlothNinja/sn"
 	gtype "github.com/SlothNinja/type"
 	"github.com/SlothNinja/user"
 	"github.com/gin-gonic/gin"
 	"google.golang.org/api/iterator"
-	"google.golang.org/appengine"
-	"google.golang.org/appengine/taskqueue"
+
+	cloudtasks "cloud.google.com/go/cloudtasks/apiv2"
+	taskspb "google.golang.org/genproto/googleapis/cloud/tasks/v2"
 )
 
 const (
@@ -39,7 +42,7 @@ func ProjectedFrom(c *gin.Context) (r *Rating) {
 
 func AddRoutes(prefix string, engine *gin.Engine) {
 	g1 := engine.Group(prefix + "s")
-	g1.POST("/userUpdate", updateUser)
+	g1.POST("/userUpdate/:uid/:type", updateUser)
 
 	g1.GET("/update/:type", Update)
 
@@ -51,8 +54,6 @@ func AddRoutes(prefix string, engine *gin.Engine) {
 // Ratings
 type Ratings []*Rating
 type Rating struct {
-	// ID     int64          `gae:"$id"`
-	// Parent *datastore.Key `gae:"$parent"`
 	Key *datastore.Key `datastore:"__key__"`
 	Common
 }
@@ -77,8 +78,6 @@ func (r *Rating) LoadKey(k *datastore.Key) error {
 
 type CurrentRatings []*CurrentRating
 type CurrentRating struct {
-	// ID     string         `gae:"$id"`
-	// Parent *datastore.Key `gae:"$parent"`
 	Key *datastore.Key `datastore:"__key__"`
 	Common
 }
@@ -144,8 +143,6 @@ func NewCurrent(c *gin.Context, pk *datastore.Key, t gtype.Type, params ...float
 
 	rating := new(CurrentRating)
 	rating.Key = datastore.NameKey(crKind, t.SString(), pk)
-	// rating.ID = t.SString()
-	// rating.Parent = pk
 	rating.R = r
 	rating.RD = rd
 	rating.Low = r - (2.0 * rd)
@@ -228,8 +225,6 @@ func GetAll(c *gin.Context, uKey *datastore.Key) (CurrentRatings, error) {
 	for i, t := range gtype.Types {
 		rs[i] = NewCurrent(c, uKey, t)
 		ks[i] = rs[i].Key
-		// rs[i].Parent = uKey
-		// rs[i].ID = t.SString()
 	}
 
 	err = dsClient.GetMulti(c, ks, rs)
@@ -257,21 +252,6 @@ func GetAll(c *gin.Context, uKey *datastore.Key) (CurrentRatings, error) {
 	}
 	return nil, merr
 }
-
-// func GetHistory(c *gin.Context, uKey *datastore.Key, t gtype.Type) (Ratings, error) {
-// 	ratings := make(Ratings, len(gtype.Types))
-// 	keys := make([]*datastore.Key, len(gtype.Types))
-// 	for i, t := range gtype.Types {
-// 		ratings[i] = New(c, uKey, t)
-// 		if ok := datastore.PopulateKey(ratings[i], keys[i]); !ok {
-// 			return nil, fmt.Errorf("Unable to populate rating with key.")
-// 		}
-// 	}
-// 	if err := datastore.Get(c, ratings); err != nil {
-// 		return nil, err
-// 	}
-// 	return ratings, nil
-// }
 
 func GetFor(c *gin.Context, t gtype.Type) (CurrentRatings, error) {
 	dsClient, err := datastore.NewClient(c, "")
@@ -339,7 +319,7 @@ func Index(c *gin.Context) {
 		"Heading":   "Ratings: " + t.String(),
 		"Types":     gtype.Types,
 		"Context":   c,
-		"VersionID": appengine.VersionID(c),
+		"VersionID": sn.VersionID(),
 		"CUser":     user.CurrentFrom(c),
 	})
 }
@@ -439,8 +419,55 @@ func For(c *gin.Context, u *user.User, t gtype.Type) (*CurrentRating, error) {
 
 func MultiFor(c *gin.Context, u *user.User) (CurrentRatings, error) {
 	return GetAll(c, u.Key)
-	// return GetAll(c, datastore.KeyForObj(c, u))
 }
+
+// // AddMulti has a limit of 100 tasks.  Thus, the batching.
+// func Update(c *gin.Context) {
+// 	log.Debugf("Entering")
+// 	defer log.Debugf("Exiting")
+//
+// 	dsClient, err := datastore.NewClient(c, "")
+// 	if err != nil {
+// 		log.Errorf(err.Error())
+// 		c.AbortWithStatus(http.StatusInternalServerError)
+// 	}
+//
+// 	var tk *taskqueue.Task
+//
+// 	tp := c.Param("type")
+// 	q := user.AllQuery(c).
+// 		KeysOnly()
+// 	path := "/ratings/userUpdate"
+// 	ts := make([]*taskqueue.Task, 0, 100)
+// 	o := taskqueue.RetryOptions{RetryLimit: 5}
+//
+// 	tparams := make(url.Values)
+// 	tparams.Set("type", tp)
+//
+// 	it := dsClient.Run(c, q)
+// 	for {
+// 		k, err := it.Next(nil)
+// 		if err == iterator.Done {
+// 			break
+// 		}
+//
+// 		if err != nil {
+// 			log.Errorf(err.Error())
+// 			c.AbortWithStatus(http.StatusInternalServerError)
+// 		}
+//
+// 		tparams.Set("uid", fmt.Sprintf("%v", k.ID))
+// 		tk = taskqueue.NewPOSTTask(path, tparams)
+// 		tk.RetryOptions = &o
+// 		ts = append(ts, tk)
+// 	}
+//
+// 	_, err = taskqueue.AddMulti(c, ts, "")
+// 	if err != nil {
+// 		log.Errorf(err.Error())
+// 		c.AbortWithStatus(http.StatusInternalServerError)
+// 	}
+// }
 
 // AddMulti has a limit of 100 tasks.  Thus, the batching.
 func Update(c *gin.Context) {
@@ -453,19 +480,15 @@ func Update(c *gin.Context) {
 		c.AbortWithStatus(http.StatusInternalServerError)
 	}
 
-	var tk *taskqueue.Task
+	t := gtype.ToType[c.Param("type")]
+	projectID := os.Getenv("GOOGLE_CLOUD_PROJECT")
+	locationID := "us-central1"
+	queueID := "default"
 
-	tp := c.Param("type")
 	q := user.AllQuery(c).
 		KeysOnly()
-	path := "/ratings/userUpdate"
-	ts := make([]*taskqueue.Task, 0, 100)
-	o := taskqueue.RetryOptions{RetryLimit: 5}
-
-	tparams := make(url.Values)
-	tparams.Set("type", tp)
-
 	it := dsClient.Run(c, q)
+
 	for {
 		k, err := it.Next(nil)
 		if err == iterator.Done {
@@ -477,17 +500,21 @@ func Update(c *gin.Context) {
 			c.AbortWithStatus(http.StatusInternalServerError)
 		}
 
-		tparams.Set("uid", fmt.Sprintf("%v", k.ID))
-		tk = taskqueue.NewPOSTTask(path, tparams)
-		tk.RetryOptions = &o
-		ts = append(ts, tk)
+		task, err := createTask(projectID, locationID, queueID, k.ID, t)
+		if err != nil {
+			log.Errorf("Task: %#v\nError: %v", task, err)
+		}
+		// tparams.Set("uid", fmt.Sprintf("%v", k.ID))
+		// tk = taskqueue.NewPOSTTask(path, tparams)
+		// tk.RetryOptions = &o
+		// ts = append(ts, tk)
 	}
 
-	_, err = taskqueue.AddMulti(c, ts, "")
-	if err != nil {
-		log.Errorf(err.Error())
-		c.AbortWithStatus(http.StatusInternalServerError)
-	}
+	// _, err = taskqueue.AddMulti(c, ts, "")
+	// if err != nil {
+	// 	log.Errorf(err.Error())
+	// 	c.AbortWithStatus(http.StatusInternalServerError)
+	// }
 }
 
 func updateUser(c *gin.Context) {
@@ -501,12 +528,16 @@ func updateUser(c *gin.Context) {
 		return
 	}
 
-	uid, err := strconv.ParseInt(c.PostForm("uid"), 10, 64)
+	uid, err := strconv.ParseInt(c.Param("uid"), 10, 64)
 	if err != nil {
 		log.Errorf("Invalid uid: %s received", c.PostForm("uid"))
 		c.AbortWithStatus(http.StatusNotFound)
 		return
 	}
+
+	t := gtype.ToType[c.Param("type")]
+
+	log.Debugf("updating rating of user: %d for game: %s", uid, t.IDString())
 
 	u := user.New(c, uid)
 	err = dsClient.Get(c, u.Key, u)
@@ -515,8 +546,6 @@ func updateUser(c *gin.Context) {
 		c.AbortWithStatus(http.StatusNotFound)
 		return
 	}
-
-	t := gtype.ToType[c.PostForm("type")]
 
 	r, err := For(c, u, t)
 	if err != nil {
@@ -527,7 +556,7 @@ func updateUser(c *gin.Context) {
 
 	cs, err := contest.UnappliedFor(c, u.Key, t)
 	if err != nil {
-		log.Errorf("Ratings update error when getting unapplied contests for user ID: %v.\n Error: %s", u.ID, err)
+		log.Errorf("Ratings update error when getting unapplied contests for user ID: %v.\n Error: %s", u.ID(), err)
 		c.AbortWithStatus(http.StatusInternalServerError)
 		return
 
@@ -535,18 +564,18 @@ func updateUser(c *gin.Context) {
 
 	p, err := r.Projected(c, cs)
 	if err != nil {
-		log.Errorf("Ratings update error when getting projected rating for user ID: %v\n Error: %s", u.ID, err)
+		log.Errorf("Ratings update error when getting projected rating for user ID: %v\n Error: %s", u.ID(), err)
 		c.AbortWithStatus(http.StatusInternalServerError)
 		return
 	}
 
 	if time.Since(time.Time(r.UpdatedAt)) < 504*time.Hour {
-		log.Debugf("Did not update rating for user ID: %v", u.ID)
+		log.Debugf("Did not update rating for user ID: %v", u.ID())
 		log.Debugf("Rating updated %s ago.", time.Since(time.Time(r.UpdatedAt)))
 		return
 	}
 
-	log.Debugf("Processing rating update for user ID: %v", u.ID)
+	log.Debugf("Processing rating update for user ID: %v", u.ID())
 	log.Debugf("Projected rating: %#v", p)
 	log.Debugf("Unapplied contest count: %v", len(cs))
 
@@ -579,7 +608,7 @@ func updateUser(c *gin.Context) {
 		return err
 	})
 	if err != nil {
-		log.Errorf("Ratings update err when saving updated ratings for user ID: %v\n Error: %s", u.ID, err)
+		log.Errorf("Ratings update err when saving updated ratings for user ID: %v\n Error: %s", u.ID(), err)
 		c.AbortWithStatus(http.StatusInternalServerError)
 	}
 	log.Debugf("Reached RunInTransaction")
@@ -640,20 +669,6 @@ func Projected(c *gin.Context) (pr Ratings) {
 	pr, _ = c.Value("Projected").(Ratings)
 	return
 }
-
-//func (r *Rating) Save(ch chan<- datastore.Property) error {
-//	// Time stamp
-//	t := time.Now()
-//	if r.CreatedAt.IsZero() {
-//		r.CreatedAt = t
-//	}
-//	r.UpdatedAt = t
-//	return datastore.SaveStruct(r, ch)
-//}
-//
-//func (r *Rating) Load(ch <-chan datastore.Property) error {
-//	return datastore.LoadStruct(r, ch)
-//}
 
 type jRating struct {
 	Type template.HTML `json:"type"`
@@ -841,7 +856,6 @@ func IncreaseFor(c *gin.Context, u *user.User, t gtype.Type, cs contest.Contests
 	log.Debugf("Entering")
 	defer log.Debugf("Exiting")
 
-	// k := datastore.KeyForObj(c, u)
 	k := u.Key
 
 	var ucs contest.Contests
@@ -869,4 +883,41 @@ func filterContestsFor(cs contest.Contests, pk *datastore.Key) (fcs contest.Cont
 		}
 	}
 	return
+}
+
+// createTask creates a new task in your App Engine queue.
+func createTask(projectID, locationID, queueID string, uid int64, t gtype.Type) (*taskspb.Task, error) {
+	// Create a new Cloud Tasks client instance.
+	// See https://godoc.org/cloud.google.com/go/cloudtasks/apiv2
+	ctx := context.Background()
+	client, err := cloudtasks.NewClient(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("NewClient: %v", err)
+	}
+	defer client.Close()
+
+	// Build the Task queue path.
+	queuePath := fmt.Sprintf("projects/%s/locations/%s/queues/%s", projectID, locationID, queueID)
+
+	// Build the Task payload.
+	// https://godoc.org/google.golang.org/genproto/googleapis/cloud/tasks/v2#CreateTaskRequest
+	req := &taskspb.CreateTaskRequest{
+		Parent: queuePath,
+		Task: &taskspb.Task{
+			// https://godoc.org/google.golang.org/genproto/googleapis/cloud/tasks/v2#AppEngineHttpRequest
+			MessageType: &taskspb.Task_AppEngineHttpRequest{
+				AppEngineHttpRequest: &taskspb.AppEngineHttpRequest{
+					HttpMethod:  taskspb.HttpMethod_POST,
+					RelativeUri: fmt.Sprintf("/ratings/userUpdate/%d/%s", uid, t.IDString()),
+				},
+			},
+		},
+	}
+
+	createdTask, err := client.CreateTask(ctx, req)
+	if err != nil {
+		return nil, fmt.Errorf("cloudtasks.CreateTask: %v", err)
+	}
+
+	return createdTask, nil
 }
