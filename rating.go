@@ -40,27 +40,27 @@ func ProjectedFrom(c *gin.Context) (r *Rating) {
 	return
 }
 
-type server struct {
+type Client struct {
 	*datastore.Client
 	contests contest.Client
 }
 
-func NewClient(dsClient *datastore.Client) server {
-	return server{
+func NewClient(dsClient *datastore.Client) Client {
+	return Client{
 		Client:   dsClient,
 		contests: contest.NewClient(dsClient),
 	}
 }
 
-func (svr server) AddRoutes(prefix string, engine *gin.Engine) *gin.Engine {
+func (client Client) AddRoutes(prefix string, engine *gin.Engine) *gin.Engine {
 	g1 := engine.Group(prefix + "s")
-	g1.POST("/userUpdate/:uid/:type", svr.updateUser)
+	g1.POST("/userUpdate/:uid/:type", client.updateUser)
 
-	g1.GET("/update/:type", svr.update)
+	g1.GET("/update/:type", client.update)
 
-	g1.GET("/show/:type", svr.index)
+	g1.GET("/show/:type", client.index)
 
-	g1.POST("/show/:type/json", svr.jsonFilteredAction)
+	g1.POST("/show/:type/json", client.jsonFilteredAction)
 
 	return engine
 }
@@ -186,12 +186,12 @@ func singleError(e error) error {
 }
 
 // Get Current Rating for gtype.Type and user associated with uKey
-func (svr server) get(c *gin.Context, uKey *datastore.Key, t gtype.Type) (*CurrentRating, error) {
-	ratings, err := svr.getMulti(c, []*datastore.Key{uKey}, t)
+func (client Client) GetRating(c *gin.Context, uKey *datastore.Key, t gtype.Type) (*CurrentRating, error) {
+	ratings, err := client.GetRatings(c, []*datastore.Key{uKey}, t)
 	return ratings[0], singleError(err)
 }
 
-func (svr server) getMulti(c *gin.Context, uKeys []*datastore.Key, t gtype.Type) (CurrentRatings, error) {
+func (client Client) GetRatings(c *gin.Context, uKeys []*datastore.Key, t gtype.Type) (CurrentRatings, error) {
 	l := len(uKeys)
 	ratings := make(CurrentRatings, l)
 	ks := make([]*datastore.Key, l)
@@ -200,7 +200,7 @@ func (svr server) getMulti(c *gin.Context, uKeys []*datastore.Key, t gtype.Type)
 		ks[i] = ratings[i].Key
 	}
 
-	err := svr.GetMulti(c, ks, ratings)
+	err := client.GetMulti(c, ks, ratings)
 	if err == nil {
 		return ratings, nil
 	}
@@ -222,7 +222,7 @@ func (svr server) getMulti(c *gin.Context, uKeys []*datastore.Key, t gtype.Type)
 	}
 }
 
-func (svr server) getAll(c *gin.Context, uKey *datastore.Key) (CurrentRatings, error) {
+func (client Client) getAll(c *gin.Context, uKey *datastore.Key) (CurrentRatings, error) {
 	l := len(gtype.Types)
 	rs := make(CurrentRatings, l)
 	ks := make([]*datastore.Key, l)
@@ -231,7 +231,7 @@ func (svr server) getAll(c *gin.Context, uKey *datastore.Key) (CurrentRatings, e
 		ks[i] = rs[i].Key
 	}
 
-	err := svr.GetMulti(c, ks, rs)
+	err := client.GetMulti(c, ks, rs)
 	if err == nil {
 		return nil, err
 	}
@@ -257,14 +257,14 @@ func (svr server) getAll(c *gin.Context, uKey *datastore.Key) (CurrentRatings, e
 	return nil, merr
 }
 
-func (svr server) getFor(c *gin.Context, t gtype.Type) (CurrentRatings, error) {
+func (client Client) getFor(c *gin.Context, t gtype.Type) (CurrentRatings, error) {
 	q := datastore.NewQuery(crKind).
 		Ancestor(user.RootKey(c)).
 		Filter("Type=", int(t)).
 		Order("-Low")
 
 	var rs CurrentRatings
-	_, err := svr.GetAll(c, q, &rs)
+	_, err := client.GetAll(c, q, &rs)
 	if err != nil {
 		return nil, err
 	}
@@ -308,7 +308,7 @@ func (r *CurrentRating) Generated() bool {
 	return r.generated
 }
 
-func (svr server) index(c *gin.Context) {
+func (client Client) index(c *gin.Context) {
 	log.Debugf("Entering")
 	defer log.Debugf("Exiting")
 
@@ -327,7 +327,7 @@ func getAllQuery(c *gin.Context) *datastore.Query {
 	return datastore.NewQuery(crKind).Ancestor(user.RootKey(c))
 }
 
-func (svr server) getFiltered(c *gin.Context, t gtype.Type, leader bool, offset, limit int32) (CurrentRatings, int64, error) {
+func (client Client) getFiltered(c *gin.Context, t gtype.Type, leader bool, offset, limit int32) (CurrentRatings, int64, error) {
 	q := getAllQuery(c)
 
 	if leader {
@@ -339,7 +339,7 @@ func (svr server) getFiltered(c *gin.Context, t gtype.Type, leader bool, offset,
 	}
 
 	var cnt int64
-	count, err := svr.Count(c, q)
+	count, err := client.Count(c, q)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -350,7 +350,7 @@ func (svr server) getFiltered(c *gin.Context, t gtype.Type, leader bool, offset,
 		Order("-Low")
 
 	var rs CurrentRatings
-	_, err = svr.GetAll(c, q, &rs)
+	_, err = client.GetAll(c, q, &rs)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -358,7 +358,7 @@ func (svr server) getFiltered(c *gin.Context, t gtype.Type, leader bool, offset,
 	return rs, cnt, err
 }
 
-func (svr server) getUsers(c *gin.Context, rs CurrentRatings) (user.Users, error) {
+func (client Client) getUsers(c *gin.Context, rs CurrentRatings) (user.Users, error) {
 	log.Debugf("Entering")
 	defer log.Debugf("Exiting")
 
@@ -370,14 +370,14 @@ func (svr server) getUsers(c *gin.Context, rs CurrentRatings) (user.Users, error
 		ks[i] = rs[i].Key.Parent
 	}
 
-	err := svr.GetMulti(c, ks, us)
+	err := client.GetMulti(c, ks, us)
 	if err != nil {
 		return nil, err
 	}
 	return us, nil
 }
 
-func (svr server) getProjected(c *gin.Context, rs CurrentRatings) (ps CurrentRatings, err error) {
+func (client Client) getProjected(c *gin.Context, rs CurrentRatings) (ps CurrentRatings, err error) {
 	log.Debugf("Entering")
 	defer log.Debugf("Exiting")
 
@@ -386,7 +386,7 @@ func (svr server) getProjected(c *gin.Context, rs CurrentRatings) (ps CurrentRat
 	for i, r := range rs {
 		uKey := r.Key.Parent
 
-		if cs, err = svr.contests.UnappliedFor(c, uKey, r.Type); err != nil {
+		if cs, err = client.contests.UnappliedFor(c, uKey, r.Type); err != nil {
 			return
 		}
 
@@ -401,16 +401,16 @@ func (svr server) getProjected(c *gin.Context, rs CurrentRatings) (ps CurrentRat
 	return
 }
 
-func (svr server) forUser(c *gin.Context, u *user.User, t gtype.Type) (*CurrentRating, error) {
-	return svr.get(c, u.Key, t)
+func (client Client) forUser(c *gin.Context, u *user.User, t gtype.Type) (*CurrentRating, error) {
+	return client.GetRating(c, u.Key, t)
 }
 
-func (svr server) multiFor(c *gin.Context, u *user.User) (CurrentRatings, error) {
-	return svr.getAll(c, u.Key)
+func (client Client) multiFor(c *gin.Context, u *user.User) (CurrentRatings, error) {
+	return client.getAll(c, u.Key)
 }
 
 // AddMulti has a limit of 100 tasks.  Thus, the batching.
-func (svr server) update(c *gin.Context) {
+func (client Client) update(c *gin.Context) {
 	log.Debugf("Entering")
 	defer log.Debugf("Exiting")
 
@@ -421,7 +421,7 @@ func (svr server) update(c *gin.Context) {
 
 	q := user.AllQuery(c).
 		KeysOnly()
-	it := svr.Run(c, q)
+	it := client.Run(c, q)
 
 	for {
 		k, err := it.Next(nil)
@@ -451,7 +451,7 @@ func (svr server) update(c *gin.Context) {
 	// }
 }
 
-func (svr server) updateUser(c *gin.Context) {
+func (client Client) updateUser(c *gin.Context) {
 	log.Debugf("Entering")
 	defer log.Debugf("Exiting")
 
@@ -467,21 +467,21 @@ func (svr server) updateUser(c *gin.Context) {
 	log.Debugf("updating rating of user: %d for game: %s", uid, t.IDString())
 
 	u := user.New(c, uid)
-	err = svr.Get(c, u.Key, u)
+	err = client.Get(c, u.Key, u)
 	if err != nil {
 		log.Errorf("Unable to find user for id: %s", c.PostForm("uid"))
 		c.AbortWithStatus(http.StatusNotFound)
 		return
 	}
 
-	r, err := svr.forUser(c, u, t)
+	r, err := client.forUser(c, u, t)
 	if err != nil {
 		log.Errorf("Unable to find rating for userid: %s", c.PostForm("uid"))
 		c.AbortWithStatus(http.StatusNotFound)
 		return
 	}
 
-	cs, err := svr.contests.UnappliedFor(c, u.Key, t)
+	cs, err := client.contests.UnappliedFor(c, u.Key, t)
 	if err != nil {
 		log.Errorf("Ratings update error when getting unapplied contests for user ID: %v.\n Error: %s", u.ID(), err)
 		c.AbortWithStatus(http.StatusInternalServerError)
@@ -530,7 +530,7 @@ func (svr server) updateUser(c *gin.Context) {
 		ks = append(ks, c.Key)
 	}
 
-	_, err = svr.RunInTransaction(c, func(tx *datastore.Transaction) error {
+	_, err = client.RunInTransaction(c, func(tx *datastore.Transaction) error {
 		_, err := tx.PutMulti(ks, es)
 		return err
 	})
@@ -541,7 +541,7 @@ func (svr server) updateUser(c *gin.Context) {
 	log.Debugf("Reached RunInTransaction")
 }
 
-func (svr server) fetch(c *gin.Context) {
+func (client Client) fetch(c *gin.Context) {
 	if CurrentRatingsFrom(c) != nil {
 		return
 	}
@@ -553,7 +553,7 @@ func (svr server) fetch(c *gin.Context) {
 		return
 	}
 
-	if rs, err := svr.multiFor(c, u); err != nil {
+	if rs, err := client.multiFor(c, u); err != nil {
 		restful.AddErrorf(c, err.Error())
 		c.Redirect(http.StatusSeeOther, homePath)
 	} else {
@@ -565,7 +565,7 @@ func Fetched(c *gin.Context) CurrentRatings {
 	return CurrentRatingsFrom(c)
 }
 
-func (svr server) fetchProjected(c *gin.Context) {
+func (client Client) fetchProjected(c *gin.Context) {
 	if ProjectedFrom(c) != nil {
 		return
 	}
@@ -577,7 +577,7 @@ func (svr server) fetchProjected(c *gin.Context) {
 		return
 	}
 
-	cm, err := svr.contests.Unapplied(c, user.Fetched(c).Key)
+	cm, err := client.contests.Unapplied(c, user.Fetched(c).Key)
 	if err != nil {
 		restful.AddErrorf(c, err.Error())
 		c.Redirect(http.StatusSeeOther, homePath)
@@ -614,7 +614,7 @@ type jCombined struct {
 	Projected template.HTML `json:"projected"`
 }
 
-func (svr server) jsonIndexAction(c *gin.Context) {
+func (client Client) jsonIndexAction(c *gin.Context) {
 	log.Debugf("Entering")
 	defer log.Debugf("Exiting")
 
@@ -626,21 +626,21 @@ func (svr server) jsonIndexAction(c *gin.Context) {
 	}
 
 	u := user.New(c, uid)
-	err = svr.Get(c, u.Key, u)
+	err = client.Get(c, u.Key, u)
 	if err != nil {
 		log.Errorf("rating#JSONIndexAction unable to find user for uid: %d", uid)
 		c.Redirect(http.StatusSeeOther, homePath)
 		return
 	}
 
-	rs, err := svr.multiFor(c, u)
+	rs, err := client.multiFor(c, u)
 	if err != nil {
 		log.Errorf("rating#JSONIndexAction MultiFor Error: %s", err)
 		c.Redirect(http.StatusSeeOther, homePath)
 		return
 	}
 
-	ps, err := svr.getProjected(c, rs)
+	ps, err := client.getProjected(c, rs)
 	if err != nil {
 		log.Errorf("rating#getProjected Error: %s", err)
 		c.Redirect(http.StatusSeeOther, homePath)
@@ -654,7 +654,7 @@ func (svr server) jsonIndexAction(c *gin.Context) {
 	}
 }
 
-func (svr server) jsonFilteredAction(c *gin.Context) {
+func (client Client) jsonFilteredAction(c *gin.Context) {
 	log.Debugf("Entering")
 	defer log.Debugf("Exiting")
 
@@ -669,19 +669,19 @@ func (svr server) jsonFilteredAction(c *gin.Context) {
 		limit = int32(l)
 	}
 
-	rs, cnt, err := svr.getFiltered(c, t, true, offset, limit)
+	rs, cnt, err := client.getFiltered(c, t, true, offset, limit)
 	if err != nil {
 		log.Errorf("rating#getFiltered Error: %s", err)
 		return
 	}
 
-	us, err := svr.getUsers(c, rs)
+	us, err := client.getUsers(c, rs)
 	if err != nil {
 		log.Errorf("rating#getUsers Error: %s", err)
 		return
 	}
 
-	ps, err := svr.getProjected(c, rs)
+	ps, err := client.getProjected(c, rs)
 	if err != nil {
 		log.Errorf("rating#getProjected Error: %s", err)
 		return
@@ -772,19 +772,19 @@ func toCombined(c *gin.Context, us user.Users, rs, ps CurrentRatings, o int32, c
 	return table, nil
 }
 
-func (svr server) increaseFor(c *gin.Context, u *user.User, t gtype.Type, cs contest.Contests) (cr, nr *CurrentRating, err error) {
+func (client Client) increaseFor(c *gin.Context, u *user.User, t gtype.Type, cs contest.Contests) (cr, nr *CurrentRating, err error) {
 	log.Debugf("Entering")
 	defer log.Debugf("Exiting")
 
 	k := u.Key
 
 	var ucs contest.Contests
-	if ucs, err = svr.contests.UnappliedFor(c, k, t); err != nil {
+	if ucs, err = client.contests.UnappliedFor(c, k, t); err != nil {
 		return
 	}
 
 	var r *CurrentRating
-	if r, err = svr.forUser(c, u, t); err != nil {
+	if r, err = client.forUser(c, u, t); err != nil {
 		return
 	}
 
