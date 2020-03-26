@@ -614,7 +614,7 @@ type jCombined struct {
 	Projected template.HTML `json:"projected"`
 }
 
-func (client Client) jsonIndexAction(c *gin.Context) {
+func (client Client) JSONIndexAction(c *gin.Context) {
 	log.Debugf("Entering")
 	defer log.Debugf("Exiting")
 
