@@ -772,7 +772,7 @@ func toCombined(c *gin.Context, us user.Users, rs, ps CurrentRatings, o int32, c
 	return table, nil
 }
 
-func (client Client) increaseFor(c *gin.Context, u *user.User, t gtype.Type, cs contest.Contests) (cr, nr *CurrentRating, err error) {
+func (client Client) IncreaseFor(c *gin.Context, u *user.User, t gtype.Type, cs contest.Contests) (cr, nr *CurrentRating, err error) {
 	log.Debugf("Entering")
 	defer log.Debugf("Exiting")
 
