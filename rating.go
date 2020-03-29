@@ -388,28 +388,35 @@ func (rs CurrentRatings) getUsers(c *gin.Context) (user.Users, error) {
 	return us, nil
 }
 
-func (rs CurrentRatings) getProjected(c *gin.Context) (ps CurrentRatings, err error) {
+func (rs CurrentRatings) getProjected(c *gin.Context) (CurrentRatings, error) {
 	log.Debugf("Entering")
 	defer log.Debugf("Exiting")
 
-	ps = make(CurrentRatings, len(rs))
-	var cs contest.Contests
+	dsClient, err := datastore.NewClient(c, "")
+	if err != nil {
+		return nil, err
+	}
+
+	client := contest.NewClient(dsClient)
+	ps := make(CurrentRatings, len(rs))
 	for i, r := range rs {
 		uKey := r.Key.Parent
 
-		if cs, err = contest.UnappliedFor(c, uKey, r.Type); err != nil {
-			return
+		cs, err := client.UnappliedFor(c, uKey, r.Type)
+		if err != nil {
+			return nil, err
 		}
 
-		if ps[i], err = r.Projected(c, cs); err != nil {
-			return
+		ps[i], err = r.Projected(c, cs)
+		if err != nil {
+			return nil, err
 		}
 
 		if r.generated && r.generated && len(cs) == 0 {
 			ps[i].generated = true
 		}
 	}
-	return
+	return ps, nil
 }
 
 func For(c *gin.Context, u *user.User, t gtype.Type) (*CurrentRating, error) {
@@ -530,33 +537,32 @@ func updateUser(c *gin.Context) {
 
 	uid, err := strconv.ParseInt(c.Param("uid"), 10, 64)
 	if err != nil {
-		log.Errorf("Invalid uid: %s received", c.PostForm("uid"))
+		log.Errorf(err.Error())
 		c.AbortWithStatus(http.StatusNotFound)
 		return
 	}
 
 	t := gtype.ToType[c.Param("type")]
 
-	log.Debugf("updating rating of user: %d for game: %s", uid, t.IDString())
-
 	u := user.New(c, uid)
 	err = dsClient.Get(c, u.Key, u)
 	if err != nil {
-		log.Errorf("Unable to find user for id: %s", c.PostForm("uid"))
+		log.Errorf(err.Error())
 		c.AbortWithStatus(http.StatusNotFound)
 		return
 	}
 
 	r, err := For(c, u, t)
 	if err != nil {
-		log.Errorf("Unable to find rating for userid: %s", c.PostForm("uid"))
+		log.Errorf(err.Error())
 		c.AbortWithStatus(http.StatusNotFound)
 		return
 	}
 
-	cs, err := contest.UnappliedFor(c, u.Key, t)
+	client := contest.NewClient(dsClient)
+	cs, err := client.UnappliedFor(c, u.Key, t)
 	if err != nil {
-		log.Errorf("Ratings update error when getting unapplied contests for user ID: %v.\n Error: %s", u.ID(), err)
+		log.Errorf(err.Error())
 		c.AbortWithStatus(http.StatusInternalServerError)
 		return
 
@@ -564,22 +570,17 @@ func updateUser(c *gin.Context) {
 
 	p, err := r.Projected(c, cs)
 	if err != nil {
-		log.Errorf("Ratings update error when getting projected rating for user ID: %v\n Error: %s", u.ID(), err)
+		log.Errorf(err.Error())
 		c.AbortWithStatus(http.StatusInternalServerError)
 		return
 	}
 
 	if time.Since(time.Time(r.UpdatedAt)) < 504*time.Hour {
-		log.Debugf("Did not update rating for user ID: %v", u.ID())
-		log.Debugf("Rating updated %s ago.", time.Since(time.Time(r.UpdatedAt)))
+		log.Warningf("Did not update rating for user ID: %v", u.ID())
+		log.Warningf("Rating updated %s ago.", time.Since(time.Time(r.UpdatedAt)))
 		return
 	}
 
-	log.Debugf("Processing rating update for user ID: %v", u.ID())
-	log.Debugf("Projected rating: %#v", p)
-	log.Debugf("Unapplied contest count: %v", len(cs))
-
-	log.Debugf("Reached for that ranges projected")
 	const threshold float64 = 200.0
 	// Update leader value to indicate whether present on leader boards
 	p.Leader = p.RD < threshold
@@ -596,7 +597,6 @@ func updateUser(c *gin.Context) {
 
 	}
 
-	log.Debugf("Reached for that unapplied contests")
 	for _, c := range cs {
 		c.Applied = true
 		es = append(es, c)
@@ -608,10 +608,9 @@ func updateUser(c *gin.Context) {
 		return err
 	})
 	if err != nil {
-		log.Errorf("Ratings update err when saving updated ratings for user ID: %v\n Error: %s", u.ID(), err)
+		log.Errorf(err.Error())
 		c.AbortWithStatus(http.StatusInternalServerError)
 	}
-	log.Debugf("Reached RunInTransaction")
 }
 
 func Fetch(c *gin.Context) {
@@ -650,7 +649,15 @@ func FetchProjected(c *gin.Context) {
 		return
 	}
 
-	cm, err := contest.Unapplied(c, user.Fetched(c).Key)
+	dsClient, err := datastore.NewClient(c, "")
+	if err != nil {
+		log.Errorf(err.Error())
+		c.Redirect(http.StatusSeeOther, homePath)
+		return
+	}
+
+	client := contest.NewClient(dsClient)
+	cm, err := client.Unapplied(c, user.Fetched(c).Key)
 	if err != nil {
 		restful.AddErrorf(c, err.Error())
 		c.Redirect(http.StatusSeeOther, homePath)
@@ -852,28 +859,34 @@ func toCombined(c *gin.Context, us user.Users, rs, ps CurrentRatings, o int32, c
 	return table, nil
 }
 
-func IncreaseFor(c *gin.Context, u *user.User, t gtype.Type, cs contest.Contests) (cr, nr *CurrentRating, err error) {
+func IncreaseFor(c *gin.Context, u *user.User, t gtype.Type, cs contest.Contests) (*CurrentRating, *CurrentRating, error) {
 	log.Debugf("Entering")
 	defer log.Debugf("Exiting")
 
+	dsClient, err := datastore.NewClient(c, "")
+	if err != nil {
+		return nil, nil, err
+	}
+
 	k := u.Key
-
-	var ucs contest.Contests
-	if ucs, err = contest.UnappliedFor(c, k, t); err != nil {
-		return
+	client := contest.NewClient(dsClient)
+	ucs, err := client.UnappliedFor(c, k, t)
+	if err != nil {
+		return nil, nil, err
 	}
 
-	var r *CurrentRating
-	if r, err = For(c, u, t); err != nil {
-		return
+	r, err := For(c, u, t)
+	if err != nil {
+		return nil, nil, err
 	}
 
-	if cr, err = r.Projected(c, ucs); err != nil {
-		return
+	cr, err := r.Projected(c, ucs)
+	if err != nil {
+		return nil, nil, err
 	}
 
-	nr, err = r.Projected(c, append(ucs, filterContestsFor(cs, k)...))
-	return
+	nr, err := r.Projected(c, append(ucs, filterContestsFor(cs, k)...))
+	return cr, nr, err
 }
 
 func filterContestsFor(cs contest.Contests, pk *datastore.Key) (fcs contest.Contests) {
