@@ -3,7 +3,7 @@ module github.com/SlothNinja/rating
 require (
 	cloud.google.com/go v0.55.0
 	cloud.google.com/go/datastore v1.1.0
-	github.com/SlothNinja/contest v0.0.0-20200319032446-29b690351b81
+	github.com/SlothNinja/contest v0.0.0-20200326205205-9c14973aeaac
 	github.com/SlothNinja/glicko v0.0.0-20200212023639-f1ccdd954e0a
 	github.com/SlothNinja/log v0.0.2
 	github.com/SlothNinja/restful v0.0.0-20200317231650-e1a2eb3f56b2

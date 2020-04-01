@@ -42,6 +42,8 @@ github.com/BurntSushi/toml v0.3.1/go.mod h1:xHWCNGjB5oqiDr8zfno3MHue2Ht5sIBksp03
 github.com/BurntSushi/xgb v0.0.0-20160522181843-27f122750802/go.mod h1:IVnqGOEym/WlBOVXweHU+Q+/VP0lqqI8lqeDx9IjBqo=
 github.com/SlothNinja/contest v0.0.0-20200319032446-29b690351b81 h1:vrvtEezlBbmkxoWzu9M/nVy5J2eQdZyMsGhYg8JYkoo=
 github.com/SlothNinja/contest v0.0.0-20200319032446-29b690351b81/go.mod h1:xWuD/slikRLW4jy3Q9qEWBeT1h1oPvpWC14mqaCEwpA=
+github.com/SlothNinja/contest v0.0.0-20200326205205-9c14973aeaac h1:apKC6hM9t14pViHnTT3NhoacnXJT6cgiznk7+Gh3/Vw=
+github.com/SlothNinja/contest v0.0.0-20200326205205-9c14973aeaac/go.mod h1:xWuD/slikRLW4jy3Q9qEWBeT1h1oPvpWC14mqaCEwpA=
 github.com/SlothNinja/gin-render v0.0.0-20200211051850-fbcc24764f62 h1:v9rQxAHRVujHIRnEt4jMsVNbrR9aSh9UMmEPt1/6XEo=
 github.com/SlothNinja/gin-render v0.0.0-20200211051850-fbcc24764f62/go.mod h1:Aby+/1P+1GWPN2+O+YRzr++dnRUOJtUl4/1ySkBYFrg=
 github.com/SlothNinja/glicko v0.0.0-20200212023639-f1ccdd954e0a h1:Q3KYPblyWuNmtV61DuCX+h9jsQUj4I5hVvP9IqjHzns=
