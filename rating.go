@@ -40,29 +40,15 @@ func ProjectedFrom(c *gin.Context) (r *Rating) {
 	return
 }
 
-type Client struct {
-	*datastore.Client
-	contests contest.Client
-}
-
-func NewClient(dsClient *datastore.Client) Client {
-	return Client{
-		Client:   dsClient,
-		contests: contest.NewClient(dsClient),
-	}
-}
-
-func (client Client) AddRoutes(prefix string, engine *gin.Engine) *gin.Engine {
+func AddRoutes(prefix string, engine *gin.Engine) {
 	g1 := engine.Group(prefix + "s")
-	g1.POST("/userUpdate/:uid/:type", client.updateUser)
+	g1.POST("/userUpdate/:uid/:type", updateUser)
 
-	g1.GET("/update/:type", client.update)
+	g1.GET("/update/:type", Update)
 
-	g1.GET("/show/:type", client.index)
+	g1.GET("/show/:type", Index)
 
-	g1.POST("/show/:type/json", client.jsonFilteredAction)
-
-	return engine
+	g1.POST("/show/:type/json", JSONFilteredAction)
 }
 
 // Ratings
@@ -186,12 +172,17 @@ func singleError(e error) error {
 }
 
 // Get Current Rating for gtype.Type and user associated with uKey
-func (client Client) GetRating(c *gin.Context, uKey *datastore.Key, t gtype.Type) (*CurrentRating, error) {
-	ratings, err := client.GetRatings(c, []*datastore.Key{uKey}, t)
+func Get(c *gin.Context, uKey *datastore.Key, t gtype.Type) (*CurrentRating, error) {
+	ratings, err := GetMulti(c, []*datastore.Key{uKey}, t)
 	return ratings[0], singleError(err)
 }
 
-func (client Client) GetRatings(c *gin.Context, uKeys []*datastore.Key, t gtype.Type) (CurrentRatings, error) {
+func GetMulti(c *gin.Context, uKeys []*datastore.Key, t gtype.Type) (CurrentRatings, error) {
+	dsClient, err := datastore.NewClient(c, "")
+	if err != nil {
+		return nil, err
+	}
+
 	l := len(uKeys)
 	ratings := make(CurrentRatings, l)
 	ks := make([]*datastore.Key, l)
@@ -200,7 +191,7 @@ func (client Client) GetRatings(c *gin.Context, uKeys []*datastore.Key, t gtype.
 		ks[i] = ratings[i].Key
 	}
 
-	err := client.GetMulti(c, ks, ratings)
+	err = dsClient.GetMulti(c, ks, ratings)
 	if err == nil {
 		return ratings, nil
 	}
@@ -222,7 +213,12 @@ func (client Client) GetRatings(c *gin.Context, uKeys []*datastore.Key, t gtype.
 	}
 }
 
-func (client Client) getAll(c *gin.Context, uKey *datastore.Key) (CurrentRatings, error) {
+func GetAll(c *gin.Context, uKey *datastore.Key) (CurrentRatings, error) {
+	dsClient, err := datastore.NewClient(c, "")
+	if err != nil {
+		return nil, err
+	}
+
 	l := len(gtype.Types)
 	rs := make(CurrentRatings, l)
 	ks := make([]*datastore.Key, l)
@@ -231,7 +227,7 @@ func (client Client) getAll(c *gin.Context, uKey *datastore.Key) (CurrentRatings
 		ks[i] = rs[i].Key
 	}
 
-	err := client.GetMulti(c, ks, rs)
+	err = dsClient.GetMulti(c, ks, rs)
 	if err == nil {
 		return nil, err
 	}
@@ -257,14 +253,19 @@ func (client Client) getAll(c *gin.Context, uKey *datastore.Key) (CurrentRatings
 	return nil, merr
 }
 
-func (client Client) getFor(c *gin.Context, t gtype.Type) (CurrentRatings, error) {
+func GetFor(c *gin.Context, t gtype.Type) (CurrentRatings, error) {
+	dsClient, err := datastore.NewClient(c, "")
+	if err != nil {
+		return nil, err
+	}
+
 	q := datastore.NewQuery(crKind).
 		Ancestor(user.RootKey(c)).
 		Filter("Type=", int(t)).
 		Order("-Low")
 
 	var rs CurrentRatings
-	_, err := client.GetAll(c, q, &rs)
+	_, err = dsClient.GetAll(c, q, &rs)
 	if err != nil {
 		return nil, err
 	}
@@ -308,7 +309,7 @@ func (r *CurrentRating) Generated() bool {
 	return r.generated
 }
 
-func (client Client) index(c *gin.Context) {
+func Index(c *gin.Context) {
 	log.Debugf("Entering")
 	defer log.Debugf("Exiting")
 
@@ -327,7 +328,12 @@ func getAllQuery(c *gin.Context) *datastore.Query {
 	return datastore.NewQuery(crKind).Ancestor(user.RootKey(c))
 }
 
-func (client Client) getFiltered(c *gin.Context, t gtype.Type, leader bool, offset, limit int32) (CurrentRatings, int64, error) {
+func getFiltered(c *gin.Context, t gtype.Type, leader bool, offset, limit int32) (CurrentRatings, int64, error) {
+	dsClient, err := datastore.NewClient(c, "")
+	if err != nil {
+		return nil, 0, err
+	}
+
 	q := getAllQuery(c)
 
 	if leader {
@@ -339,7 +345,7 @@ func (client Client) getFiltered(c *gin.Context, t gtype.Type, leader bool, offs
 	}
 
 	var cnt int64
-	count, err := client.Count(c, q)
+	count, err := dsClient.Count(c, q)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -350,7 +356,7 @@ func (client Client) getFiltered(c *gin.Context, t gtype.Type, leader bool, offs
 		Order("-Low")
 
 	var rs CurrentRatings
-	_, err = client.GetAll(c, q, &rs)
+	_, err = dsClient.GetAll(c, q, &rs)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -358,9 +364,14 @@ func (client Client) getFiltered(c *gin.Context, t gtype.Type, leader bool, offs
 	return rs, cnt, err
 }
 
-func (client Client) getUsers(c *gin.Context, rs CurrentRatings) (user.Users, error) {
+func (rs CurrentRatings) getUsers(c *gin.Context) (user.Users, error) {
 	log.Debugf("Entering")
 	defer log.Debugf("Exiting")
+
+	dsClient, err := datastore.NewClient(c, "")
+	if err != nil {
+		return nil, err
+	}
 
 	l := len(rs)
 	us := make(user.Users, l)
@@ -370,14 +381,14 @@ func (client Client) getUsers(c *gin.Context, rs CurrentRatings) (user.Users, er
 		ks[i] = rs[i].Key.Parent
 	}
 
-	err := client.GetMulti(c, ks, us)
+	err = dsClient.GetMulti(c, ks, us)
 	if err != nil {
 		return nil, err
 	}
 	return us, nil
 }
 
-func (client Client) getProjected(c *gin.Context, rs CurrentRatings) (ps CurrentRatings, err error) {
+func (rs CurrentRatings) getProjected(c *gin.Context) (ps CurrentRatings, err error) {
 	log.Debugf("Entering")
 	defer log.Debugf("Exiting")
 
@@ -386,7 +397,7 @@ func (client Client) getProjected(c *gin.Context, rs CurrentRatings) (ps Current
 	for i, r := range rs {
 		uKey := r.Key.Parent
 
-		if cs, err = client.contests.UnappliedFor(c, uKey, r.Type); err != nil {
+		if cs, err = contest.UnappliedFor(c, uKey, r.Type); err != nil {
 			return
 		}
 
@@ -401,18 +412,73 @@ func (client Client) getProjected(c *gin.Context, rs CurrentRatings) (ps Current
 	return
 }
 
-func (client Client) forUser(c *gin.Context, u *user.User, t gtype.Type) (*CurrentRating, error) {
-	return client.GetRating(c, u.Key, t)
+func For(c *gin.Context, u *user.User, t gtype.Type) (*CurrentRating, error) {
+	return Get(c, u.Key, t)
+	// return Get(c, datastore.KeyForObj(c, u), t)
 }
 
-func (client Client) multiFor(c *gin.Context, u *user.User) (CurrentRatings, error) {
-	return client.getAll(c, u.Key)
+func MultiFor(c *gin.Context, u *user.User) (CurrentRatings, error) {
+	return GetAll(c, u.Key)
 }
+
+// // AddMulti has a limit of 100 tasks.  Thus, the batching.
+// func Update(c *gin.Context) {
+// 	log.Debugf("Entering")
+// 	defer log.Debugf("Exiting")
+//
+// 	dsClient, err := datastore.NewClient(c, "")
+// 	if err != nil {
+// 		log.Errorf(err.Error())
+// 		c.AbortWithStatus(http.StatusInternalServerError)
+// 	}
+//
+// 	var tk *taskqueue.Task
+//
+// 	tp := c.Param("type")
+// 	q := user.AllQuery(c).
+// 		KeysOnly()
+// 	path := "/ratings/userUpdate"
+// 	ts := make([]*taskqueue.Task, 0, 100)
+// 	o := taskqueue.RetryOptions{RetryLimit: 5}
+//
+// 	tparams := make(url.Values)
+// 	tparams.Set("type", tp)
+//
+// 	it := dsClient.Run(c, q)
+// 	for {
+// 		k, err := it.Next(nil)
+// 		if err == iterator.Done {
+// 			break
+// 		}
+//
+// 		if err != nil {
+// 			log.Errorf(err.Error())
+// 			c.AbortWithStatus(http.StatusInternalServerError)
+// 		}
+//
+// 		tparams.Set("uid", fmt.Sprintf("%v", k.ID))
+// 		tk = taskqueue.NewPOSTTask(path, tparams)
+// 		tk.RetryOptions = &o
+// 		ts = append(ts, tk)
+// 	}
+//
+// 	_, err = taskqueue.AddMulti(c, ts, "")
+// 	if err != nil {
+// 		log.Errorf(err.Error())
+// 		c.AbortWithStatus(http.StatusInternalServerError)
+// 	}
+// }
 
 // AddMulti has a limit of 100 tasks.  Thus, the batching.
-func (client Client) update(c *gin.Context) {
+func Update(c *gin.Context) {
 	log.Debugf("Entering")
 	defer log.Debugf("Exiting")
+
+	dsClient, err := datastore.NewClient(c, "")
+	if err != nil {
+		log.Errorf(err.Error())
+		c.AbortWithStatus(http.StatusInternalServerError)
+	}
 
 	t := gtype.ToType[c.Param("type")]
 	projectID := os.Getenv("GOOGLE_CLOUD_PROJECT")
@@ -421,7 +487,7 @@ func (client Client) update(c *gin.Context) {
 
 	q := user.AllQuery(c).
 		KeysOnly()
-	it := client.Run(c, q)
+	it := dsClient.Run(c, q)
 
 	for {
 		k, err := it.Next(nil)
@@ -451,9 +517,16 @@ func (client Client) update(c *gin.Context) {
 	// }
 }
 
-func (client Client) updateUser(c *gin.Context) {
+func updateUser(c *gin.Context) {
 	log.Debugf("Entering")
 	defer log.Debugf("Exiting")
+
+	dsClient, err := datastore.NewClient(c, "")
+	if err != nil {
+		log.Errorf(err.Error())
+		c.AbortWithStatus(http.StatusInternalServerError)
+		return
+	}
 
 	uid, err := strconv.ParseInt(c.Param("uid"), 10, 64)
 	if err != nil {
@@ -467,21 +540,21 @@ func (client Client) updateUser(c *gin.Context) {
 	log.Debugf("updating rating of user: %d for game: %s", uid, t.IDString())
 
 	u := user.New(c, uid)
-	err = client.Get(c, u.Key, u)
+	err = dsClient.Get(c, u.Key, u)
 	if err != nil {
 		log.Errorf("Unable to find user for id: %s", c.PostForm("uid"))
 		c.AbortWithStatus(http.StatusNotFound)
 		return
 	}
 
-	r, err := client.forUser(c, u, t)
+	r, err := For(c, u, t)
 	if err != nil {
 		log.Errorf("Unable to find rating for userid: %s", c.PostForm("uid"))
 		c.AbortWithStatus(http.StatusNotFound)
 		return
 	}
 
-	cs, err := client.contests.UnappliedFor(c, u.Key, t)
+	cs, err := contest.UnappliedFor(c, u.Key, t)
 	if err != nil {
 		log.Errorf("Ratings update error when getting unapplied contests for user ID: %v.\n Error: %s", u.ID(), err)
 		c.AbortWithStatus(http.StatusInternalServerError)
@@ -530,7 +603,7 @@ func (client Client) updateUser(c *gin.Context) {
 		ks = append(ks, c.Key)
 	}
 
-	_, err = client.RunInTransaction(c, func(tx *datastore.Transaction) error {
+	_, err = dsClient.RunInTransaction(c, func(tx *datastore.Transaction) error {
 		_, err := tx.PutMulti(ks, es)
 		return err
 	})
@@ -541,7 +614,7 @@ func (client Client) updateUser(c *gin.Context) {
 	log.Debugf("Reached RunInTransaction")
 }
 
-func (client Client) fetch(c *gin.Context) {
+func Fetch(c *gin.Context) {
 	if CurrentRatingsFrom(c) != nil {
 		return
 	}
@@ -553,7 +626,7 @@ func (client Client) fetch(c *gin.Context) {
 		return
 	}
 
-	if rs, err := client.multiFor(c, u); err != nil {
+	if rs, err := MultiFor(c, u); err != nil {
 		restful.AddErrorf(c, err.Error())
 		c.Redirect(http.StatusSeeOther, homePath)
 	} else {
@@ -565,7 +638,7 @@ func Fetched(c *gin.Context) CurrentRatings {
 	return CurrentRatingsFrom(c)
 }
 
-func (client Client) fetchProjected(c *gin.Context) {
+func FetchProjected(c *gin.Context) {
 	if ProjectedFrom(c) != nil {
 		return
 	}
@@ -577,7 +650,7 @@ func (client Client) fetchProjected(c *gin.Context) {
 		return
 	}
 
-	cm, err := client.contests.Unapplied(c, user.Fetched(c).Key)
+	cm, err := contest.Unapplied(c, user.Fetched(c).Key)
 	if err != nil {
 		restful.AddErrorf(c, err.Error())
 		c.Redirect(http.StatusSeeOther, homePath)
@@ -614,9 +687,16 @@ type jCombined struct {
 	Projected template.HTML `json:"projected"`
 }
 
-func (client Client) JSONIndexAction(c *gin.Context) {
+func JSONIndexAction(c *gin.Context) {
 	log.Debugf("Entering")
 	defer log.Debugf("Exiting")
+
+	dsClient, err := datastore.NewClient(c, "")
+	if err != nil {
+		log.Errorf(err.Error())
+		c.Redirect(http.StatusSeeOther, homePath)
+		return
+	}
 
 	uid, err := strconv.ParseInt(c.Param("uid"), 10, 64)
 	if err != nil {
@@ -626,21 +706,21 @@ func (client Client) JSONIndexAction(c *gin.Context) {
 	}
 
 	u := user.New(c, uid)
-	err = client.Get(c, u.Key, u)
+	err = dsClient.Get(c, u.Key, u)
 	if err != nil {
 		log.Errorf("rating#JSONIndexAction unable to find user for uid: %d", uid)
 		c.Redirect(http.StatusSeeOther, homePath)
 		return
 	}
 
-	rs, err := client.multiFor(c, u)
+	rs, err := MultiFor(c, u)
 	if err != nil {
 		log.Errorf("rating#JSONIndexAction MultiFor Error: %s", err)
 		c.Redirect(http.StatusSeeOther, homePath)
 		return
 	}
 
-	ps, err := client.getProjected(c, rs)
+	ps, err := rs.getProjected(c)
 	if err != nil {
 		log.Errorf("rating#getProjected Error: %s", err)
 		c.Redirect(http.StatusSeeOther, homePath)
@@ -654,7 +734,7 @@ func (client Client) JSONIndexAction(c *gin.Context) {
 	}
 }
 
-func (client Client) jsonFilteredAction(c *gin.Context) {
+func JSONFilteredAction(c *gin.Context) {
 	log.Debugf("Entering")
 	defer log.Debugf("Exiting")
 
@@ -669,19 +749,19 @@ func (client Client) jsonFilteredAction(c *gin.Context) {
 		limit = int32(l)
 	}
 
-	rs, cnt, err := client.getFiltered(c, t, true, offset, limit)
+	rs, cnt, err := getFiltered(c, t, true, offset, limit)
 	if err != nil {
 		log.Errorf("rating#getFiltered Error: %s", err)
 		return
 	}
 
-	us, err := client.getUsers(c, rs)
+	us, err := rs.getUsers(c)
 	if err != nil {
 		log.Errorf("rating#getUsers Error: %s", err)
 		return
 	}
 
-	ps, err := client.getProjected(c, rs)
+	ps, err := rs.getProjected(c)
 	if err != nil {
 		log.Errorf("rating#getProjected Error: %s", err)
 		return
@@ -772,19 +852,19 @@ func toCombined(c *gin.Context, us user.Users, rs, ps CurrentRatings, o int32, c
 	return table, nil
 }
 
-func (client Client) IncreaseFor(c *gin.Context, u *user.User, t gtype.Type, cs contest.Contests) (cr, nr *CurrentRating, err error) {
+func IncreaseFor(c *gin.Context, u *user.User, t gtype.Type, cs contest.Contests) (cr, nr *CurrentRating, err error) {
 	log.Debugf("Entering")
 	defer log.Debugf("Exiting")
 
 	k := u.Key
 
 	var ucs contest.Contests
-	if ucs, err = client.contests.UnappliedFor(c, k, t); err != nil {
+	if ucs, err = contest.UnappliedFor(c, k, t); err != nil {
 		return
 	}
 
 	var r *CurrentRating
-	if r, err = client.forUser(c, u, t); err != nil {
+	if r, err = For(c, u, t); err != nil {
 		return
 	}
 
