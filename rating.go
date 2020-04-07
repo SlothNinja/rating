@@ -434,21 +434,15 @@ func (client Client) Update(c *gin.Context) {
 			c.AbortWithStatus(http.StatusInternalServerError)
 		}
 
+		if k.ID == 0 {
+			continue
+		}
+
 		task, err := createTask(projectID, locationID, queueID, k.ID, t)
 		if err != nil {
 			log.Errorf("Task: %#v\nError: %v", task, err)
 		}
-		// tparams.Set("uid", fmt.Sprintf("%v", k.ID))
-		// tk = taskqueue.NewPOSTTask(path, tparams)
-		// tk.RetryOptions = &o
-		// ts = append(ts, tk)
 	}
-
-	// _, err = taskqueue.AddMulti(c, ts, "")
-	// if err != nil {
-	// 	log.Errorf(err.Error())
-	// 	c.AbortWithStatus(http.StatusInternalServerError)
-	// }
 }
 
 func (client Client) updateUser(c *gin.Context) {
