@@ -26,12 +26,14 @@ import (
 
 type Client struct {
 	DS      *datastore.Client
+	User    *datastore.Client
 	Contest contest.Client
 }
 
-func NewClient(dsClient *datastore.Client) Client {
+func NewClient(userClient *datastore.Client, dsClient *datastore.Client) Client {
 	return Client{
 		DS:      dsClient,
+		User:    userClient,
 		Contest: contest.NewClient(dsClient),
 	}
 }
@@ -370,7 +372,7 @@ func (client Client) getUsers(c *gin.Context, rs CurrentRatings) (user.Users, er
 		ks[i] = rs[i].Key.Parent
 	}
 
-	err := client.DS.GetMulti(c, ks, us)
+	err := client.User.GetMulti(c, ks, us)
 	if err != nil {
 		return nil, err
 	}
@@ -459,7 +461,7 @@ func (client Client) updateUser(c *gin.Context) {
 	t := gtype.ToType[c.Param("type")]
 
 	u := user.New(c, uid)
-	err = client.DS.Get(c, u.Key, u)
+	err = client.User.Get(c, u.Key, u)
 	if err != nil {
 		log.Errorf(err.Error())
 		c.AbortWithStatus(http.StatusNotFound)
@@ -612,7 +614,7 @@ func (client Client) JSONIndexAction(c *gin.Context) {
 	}
 
 	u := user.New(c, uid)
-	err = client.DS.Get(c, u.Key, u)
+	err = client.User.Get(c, u.Key, u)
 	if err != nil {
 		log.Errorf("rating#JSONIndexAction unable to find user for uid: %d", uid)
 		c.Redirect(http.StatusSeeOther, homePath)
