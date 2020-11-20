@@ -75,6 +75,8 @@ github.com/SlothNinja/user v1.0.0 h1:6re2MkV/JbIKgEiGzFIh+KDGMjn6+JPEA3keQhUkU58
 github.com/SlothNinja/user v1.0.0/go.mod h1:ZMssQwp+Fck2BjbIhU3mQBmKJ0NHmG15BS0+9tKnS1c=
 github.com/SlothNinja/user v1.0.2 h1:BR/tTkD0vwD8dybQbN78hjal9D1XyAWPQZuXzibHfyA=
 github.com/SlothNinja/user v1.0.2/go.mod h1:f7DpM0j2bxY5SL4hLPZ+nic5RVGYry2yTNhsSyew7po=
+github.com/SlothNinja/user v1.0.4 h1:lBRdoSMDXJH50ZLhW1vMIJ9vazqPZuEFaNUIkaxjmqc=
+github.com/SlothNinja/user v1.0.4/go.mod h1:f7DpM0j2bxY5SL4hLPZ+nic5RVGYry2yTNhsSyew7po=
 github.com/boj/redistore v0.0.0-20180917114910-cd5dcc76aeff/go.mod h1:+RTT1BOk5P97fT2CiHkbFQwkK3mjsFAP6zCYV2aXtjw=
 github.com/bradfitz/gomemcache v0.0.0-20190329173943-551aad21a668/go.mod h1:H0wQNHz2YrLsuXOZozoeDmnHXkNCRmMW0gwFWDfEZDA=
 github.com/bradleypeabody/gorilla-sessions-memcache v0.0.0-20181103040241-659414f458e1/go.mod h1:dkChI7Tbtx7H1Tj7TqGSZMOeGpMP5gLHtjroHd4agiI=
@@ -474,6 +476,8 @@ golang.org/x/tools v0.0.0-20200916150407-587cf2330ce8/go.mod h1:z6u4i615ZeAfBE4X
 golang.org/x/tools v0.0.0-20201110124207-079ba7bd75cd/go.mod h1:emZCQorbCU4vsT4fOWvOPXz4eW1wZW4PmDk9uLelYpA=
 golang.org/x/tools v0.0.0-20201119191246-c0d5e8918928 h1:+LHV2aUFUaYPoc0UtJjH8u8HlnRsuB9MCdMN2nArRac=
 golang.org/x/tools v0.0.0-20201119191246-c0d5e8918928/go.mod h1:emZCQorbCU4vsT4fOWvOPXz4eW1wZW4PmDk9uLelYpA=
+golang.org/x/tools v0.0.0-20201120025408-a7380940e005 h1:+Myf5wBnDdoc48tlhR7SAN4wvi5alXXB8jF/3ms3m14=
+golang.org/x/tools v0.0.0-20201120025408-a7380940e005/go.mod h1:emZCQorbCU4vsT4fOWvOPXz4eW1wZW4PmDk9uLelYpA=
 golang.org/x/xerrors v0.0.0-20190717185122-a985d3407aa7/go.mod h1:I/5z698sn9Ka8TeJc9MKroUUfqBBauWjQqLJ2OPfmY0=
 golang.org/x/xerrors v0.0.0-20191011141410-1b5146add898/go.mod h1:I/5z698sn9Ka8TeJc9MKroUUfqBBauWjQqLJ2OPfmY0=
 golang.org/x/xerrors v0.0.0-20191204190536-9bdfabe68543 h1:E7g+9GITq07hpfrRu66IVDexMakfv52eLZ2CXBWiKr4=

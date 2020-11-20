@@ -261,7 +261,7 @@ func (client Client) GetAll(c *gin.Context, uKey *datastore.Key) (CurrentRatings
 
 func (client Client) GetFor(c *gin.Context, t gtype.Type) (CurrentRatings, error) {
 	q := datastore.NewQuery(crKind).
-		Ancestor(user.RootKey(c)).
+		Ancestor(user.RootKey()).
 		Filter("Type=", int(t)).
 		Order("-Low")
 
@@ -330,7 +330,7 @@ func (client Client) Index(c *gin.Context) {
 }
 
 func getAllQuery(c *gin.Context) *datastore.Query {
-	return datastore.NewQuery(crKind).Ancestor(user.RootKey(c))
+	return datastore.NewQuery(crKind).Ancestor(user.RootKey())
 }
 
 func (client Client) getFiltered(c *gin.Context, t gtype.Type, leader bool, offset, limit int32) (CurrentRatings, int64, error) {
@@ -372,7 +372,7 @@ func (client Client) getUsers(c *gin.Context, rs CurrentRatings) (user.Users, er
 	us := make(user.Users, l)
 	ks := make([]*datastore.Key, l)
 	for i := range rs {
-		us[i] = user.New(c, 0)
+		us[i] = user.New(0)
 		ks[i] = rs[i].Key.Parent
 	}
 
@@ -464,7 +464,7 @@ func (client Client) updateUser(c *gin.Context) {
 
 	t := gtype.ToType[c.Param("type")]
 
-	u := user.New(c, uid)
+	u := user.New(uid)
 	err = client.User.Get(c, u.Key, u)
 	if err != nil {
 		log.Errorf(err.Error())
@@ -617,7 +617,7 @@ func (client Client) JSONIndexAction(c *gin.Context) {
 		return
 	}
 
-	u := user.New(c, uid)
+	u := user.New(uid)
 	err = client.User.Get(c, u.Key, u)
 	if err != nil {
 		log.Errorf("rating#JSONIndexAction unable to find user for uid: %d", uid)
