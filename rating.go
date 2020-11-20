@@ -314,6 +314,10 @@ func (client Client) Index(c *gin.Context) {
 	log.Debugf("Entering")
 	defer log.Debugf("Exiting")
 
+	cu, err := user.CurrentFrom(c)
+	if err != nil {
+		log.Debugf(err.Error())
+	}
 	t := gtype.ToType[c.Param("type")]
 	c.HTML(http.StatusOK, "rating/index", gin.H{
 		"Type":      t,
@@ -321,7 +325,7 @@ func (client Client) Index(c *gin.Context) {
 		"Types":     gtype.Types,
 		"Context":   c,
 		"VersionID": sn.VersionID(),
-		"CUser":     user.CurrentFrom(c),
+		"CUser":     cu,
 	})
 }
 
