@@ -11,9 +11,8 @@ require (
 	github.com/SlothNinja/restful v1.0.0
 	github.com/SlothNinja/sn v1.0.0
 	github.com/SlothNinja/type v1.0.1
-	github.com/SlothNinja/user v1.0.4
+	github.com/SlothNinja/user v1.0.6
 	github.com/gin-gonic/gin v1.6.3
-	golang.org/x/tools v0.0.0-20201120025408-a7380940e005 // indirect
 	google.golang.org/api v0.35.0
 	google.golang.org/genproto v0.0.0-20201119123407-9b1e624d6bc4
 )
