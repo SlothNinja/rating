@@ -26,11 +26,11 @@ import (
 
 type Client struct {
 	DS      *datastore.Client
-	User    *datastore.Client
+	User    user.Client
 	Contest contest.Client
 }
 
-func NewClient(userClient *datastore.Client, dsClient *datastore.Client) Client {
+func NewClient(userClient user.Client, dsClient *datastore.Client) Client {
 	return Client{
 		DS:      dsClient,
 		User:    userClient,
@@ -42,6 +42,7 @@ const (
 	currentRatingsKey = "CurrentRatings"
 	projectedKey      = "Projected"
 	homePath          = "/"
+	gravSize          = "80"
 )
 
 func CurrentRatingsFrom(c *gin.Context) (rs CurrentRatings) {
@@ -314,7 +315,7 @@ func (client Client) Index(c *gin.Context) {
 	log.Debugf("Entering")
 	defer log.Debugf("Exiting")
 
-	cu, err := user.CurrentFrom(c)
+	cu, err := client.User.Current(c)
 	if err != nil {
 		log.Debugf(err.Error())
 	}
@@ -368,15 +369,12 @@ func (client Client) getUsers(c *gin.Context, rs CurrentRatings) (user.Users, er
 	log.Debugf("Entering")
 	defer log.Debugf("Exiting")
 
-	l := len(rs)
-	us := make(user.Users, l)
-	ks := make([]*datastore.Key, l)
+	ids := make([]int64, len(rs))
 	for i := range rs {
-		us[i] = user.New(0)
-		ks[i] = rs[i].Key.Parent
+		ids[i] = rs[i].Key.Parent.ID
 	}
 
-	err := client.User.GetMulti(c, ks, us)
+	us, err := client.User.GetMulti(c, ids)
 	if err != nil {
 		return nil, err
 	}
@@ -464,8 +462,7 @@ func (client Client) updateUser(c *gin.Context) {
 
 	t := gtype.ToType[c.Param("type")]
 
-	u := user.New(uid)
-	err = client.User.Get(c, u.Key, u)
+	u, err := client.User.Get(c, uid)
 	if err != nil {
 		log.Errorf(err.Error())
 		c.AbortWithStatus(http.StatusNotFound)
@@ -617,8 +614,7 @@ func (client Client) JSONIndexAction(c *gin.Context) {
 		return
 	}
 
-	u := user.New(uid)
-	err = client.User.Get(c, u.Key, u)
+	u, err := client.User.Get(c, uid)
 	if err != nil {
 		log.Errorf("rating#JSONIndexAction unable to find user for uid: %d", uid)
 		c.Redirect(http.StatusSeeOther, homePath)
@@ -714,7 +710,7 @@ func singleUser(c *gin.Context, u *user.User, rs, ps CurrentRatings) (table *jCo
 	for i, r := range rs {
 		if p := ps[i]; !p.generated {
 			table.Data = append(table.Data, &jCombined{
-				Gravatar:  user.Gravatar(u),
+				Gravatar:  user.Gravatar(u, gravSize),
 				Name:      u.Link(),
 				Type:      template.HTML(r.Type.String()),
 				Current:   template.HTML(r.String()),
@@ -745,7 +741,7 @@ func toCombined(c *gin.Context, us user.Users, rs, ps CurrentRatings, o int32, c
 		if !r.generated {
 			table.Data = append(table.Data, &jCombined{
 				Rank:      i + int(o) + 1,
-				Gravatar:  user.Gravatar(us[i]),
+				Gravatar:  user.Gravatar(us[i], gravSize),
 				Name:      us[i].Link(),
 				Type:      template.HTML(r.Type.String()),
 				Current:   template.HTML(r.String()),

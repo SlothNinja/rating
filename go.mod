@@ -3,17 +3,18 @@ module github.com/SlothNinja/rating
 go 1.14
 
 require (
-	cloud.google.com/go v0.72.0
+	cloud.google.com/go v0.74.0
 	cloud.google.com/go/datastore v1.3.0
 	github.com/SlothNinja/contest v1.0.0
 	github.com/SlothNinja/glicko v1.0.0
 	github.com/SlothNinja/log v0.0.2
 	github.com/SlothNinja/restful v1.0.0
-	github.com/SlothNinja/sn v1.0.0
+	github.com/SlothNinja/sn v1.0.1
 	github.com/SlothNinja/type v1.0.1
-	github.com/SlothNinja/user v1.0.4
+	github.com/SlothNinja/user v1.0.10
 	github.com/gin-gonic/gin v1.6.3
-	golang.org/x/tools v0.0.0-20201120025408-a7380940e005 // indirect
-	google.golang.org/api v0.35.0
-	google.golang.org/genproto v0.0.0-20201119123407-9b1e624d6bc4
+	google.golang.org/api v0.36.0
+	google.golang.org/genproto v0.0.0-20201214200347-8c77b98c765d
 )
+
+replace github.com/SlothNinja/user => ../user
