@@ -373,6 +373,11 @@ func (client *Client) getUsers(c *gin.Context, rs CurrentRatings) (user.Users, e
 	client.Log.Debugf(msgEnter)
 	defer client.Log.Debugf(msgExit)
 
+	l := len(rs)
+	if l == 0 {
+		return nil, nil
+	}
+
 	ids := make([]int64, len(rs))
 	for i := range rs {
 		ids[i] = rs[i].Key.Parent.ID
