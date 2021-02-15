@@ -156,7 +156,7 @@ func New(c *gin.Context, id int64, pk *datastore.Key, t gtype.Type, params ...fl
 	return rating
 }
 
-func NewCurrent(c *gin.Context, pk *datastore.Key, t gtype.Type, params ...float64) *CurrentRating {
+func NewCurrent(pk *datastore.Key, t gtype.Type, params ...float64) *CurrentRating {
 	r, rd := defaultR, defaultRD
 	if len(params) == 2 {
 		r, rd = params[0], params[1]
@@ -203,7 +203,7 @@ func (client *Client) GetMulti(c *gin.Context, uKeys []*datastore.Key, t gtype.T
 	ratings := make(CurrentRatings, l)
 	ks := make([]*datastore.Key, l)
 	for i, uKey := range uKeys {
-		ratings[i] = NewCurrent(c, uKey, t)
+		ratings[i] = NewCurrent(uKey, t)
 		ks[i] = ratings[i].Key
 	}
 
@@ -234,7 +234,7 @@ func (client *Client) GetAll(c *gin.Context, uKey *datastore.Key) (CurrentRating
 	rs := make(CurrentRatings, l)
 	ks := make([]*datastore.Key, l)
 	for i, t := range gtype.Types {
-		rs[i] = NewCurrent(c, uKey, t)
+		rs[i] = NewCurrent(uKey, t)
 		ks[i] = rs[i].Key
 	}
 
@@ -282,14 +282,14 @@ func (rs CurrentRatings) Projected(c *gin.Context, cm contest.ContestMap) (Curre
 	ratings := make(CurrentRatings, len(rs))
 	for i, r := range rs {
 		var err error
-		if ratings[i], err = r.Projected(c, cm[r.Type]); err != nil {
+		if ratings[i], err = r.Projected(cm[r.Type]); err != nil {
 			return nil, err
 		}
 	}
 	return ratings, nil
 }
 
-func (r *CurrentRating) Projected(c *gin.Context, cs []*contest.Contest) (*CurrentRating, error) {
+func (r *CurrentRating) Projected(cs []*contest.Contest) (*CurrentRating, error) {
 	log.Debugf(msgEnter)
 	defer log.Debugf(msgExit)
 
@@ -308,7 +308,7 @@ func (r *CurrentRating) Projected(c *gin.Context, cs []*contest.Contest) (*Curre
 		return nil, err
 	}
 
-	return NewCurrent(c, r.Key.Parent, r.Type, rating.R, rating.RD), nil
+	return NewCurrent(r.Key.Parent, r.Type, rating.R, rating.RD), nil
 }
 
 func (r *CurrentRating) Generated() bool {
@@ -403,7 +403,7 @@ func (client *Client) getProjected(c *gin.Context, rs CurrentRatings) (CurrentRa
 			return nil, err
 		}
 
-		ps[i], err = r.Projected(c, cs)
+		ps[i], err = r.Projected(cs)
 		if err != nil {
 			return nil, err
 		}
@@ -413,6 +413,27 @@ func (client *Client) getProjected(c *gin.Context, rs CurrentRatings) (CurrentRa
 		}
 	}
 	return ps, nil
+}
+
+func (client *Client) GetProjected(c *gin.Context, ukey *datastore.Key, t gtype.Type) (*CurrentRating, error) {
+	client.Log.Debugf(msgEnter)
+	defer client.Log.Debugf(msgExit)
+
+	cs, err := client.Contest.UnappliedFor(c, ukey, t)
+	if err != nil {
+		return nil, err
+	}
+
+	r, err := client.Get(c, ukey, t)
+	if err != nil {
+		return nil, err
+	}
+
+	if r.generated && len(cs) == 0 {
+		return r, nil
+	}
+
+	return r.Projected(cs)
 }
 
 func (client *Client) For(c *gin.Context, u *user.User, t gtype.Type) (*CurrentRating, error) {
@@ -493,7 +514,7 @@ func (client *Client) updateUser(c *gin.Context) {
 
 	}
 
-	p, err := r.Projected(c, cs)
+	p, err := r.Projected(cs)
 	if err != nil {
 		client.Log.Errorf(err.Error())
 		c.AbortWithStatus(http.StatusInternalServerError)
@@ -785,12 +806,12 @@ func (client *Client) IncreaseFor(c *gin.Context, u *user.User, t gtype.Type, cs
 		return nil, nil, err
 	}
 
-	cr, err := r.Projected(c, ucs)
+	cr, err := r.Projected(ucs)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	nr, err := r.Projected(c, append(ucs, filterContestsFor(cs, k)...))
+	nr, err := r.Projected(append(ucs, filterContestsFor(cs, k)...))
 	return cr, nr, err
 }
 
