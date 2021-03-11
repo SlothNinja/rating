@@ -415,25 +415,41 @@ func (client *Client) getProjected(c *gin.Context, rs CurrentRatings) (CurrentRa
 	return ps, nil
 }
 
-func (client *Client) GetProjected(c *gin.Context, ukey *datastore.Key, t gtype.Type) (*CurrentRating, error) {
+func (client *Client) projected(c *gin.Context, ukey *datastore.Key, t gtype.Type, cs ...*contest.Contest) (*CurrentRating, error) {
 	client.Log.Debugf(msgEnter)
 	defer client.Log.Debugf(msgExit)
 
-	cs, err := client.Contest.UnappliedFor(c, ukey, t)
+	ucs, err := client.Contest.UnappliedFor(c, ukey, t)
 	if err != nil {
 		return nil, err
 	}
+
+	ucs = append(ucs, cs...)
 
 	r, err := client.Get(c, ukey, t)
 	if err != nil {
 		return nil, err
 	}
 
-	if r.generated && len(cs) == 0 {
+	if r.generated && len(ucs) == 0 {
 		return r, nil
 	}
 
-	return r.Projected(cs)
+	return r.Projected(ucs)
+}
+
+func (client *Client) GetProjected(c *gin.Context, ukey *datastore.Key, t gtype.Type) (*CurrentRating, error) {
+	client.Log.Debugf(msgEnter)
+	defer client.Log.Debugf(msgExit)
+
+	return client.projected(c, ukey, t)
+}
+
+func (client *Client) GetProjectedWith(c *gin.Context, ukey *datastore.Key, t gtype.Type, cs []*contest.Contest) (*CurrentRating, error) {
+	client.Log.Debugf(msgEnter)
+	defer client.Log.Debugf(msgExit)
+
+	return client.projected(c, ukey, t, cs...)
 }
 
 func (client *Client) For(c *gin.Context, u *user.User, t gtype.Type) (*CurrentRating, error) {
