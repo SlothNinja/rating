@@ -18,7 +18,6 @@ import (
 	gtype "github.com/SlothNinja/type"
 	"github.com/SlothNinja/user"
 	"github.com/gin-gonic/gin"
-	"github.com/patrickmn/go-cache"
 	"google.golang.org/api/iterator"
 
 	cloudtasks "cloud.google.com/go/cloudtasks/apiv2"
@@ -31,12 +30,11 @@ type Client struct {
 	Contest *contest.Client
 }
 
-func NewClient(dsClient *datastore.Client, userClient *user.Client, logger *log.Logger,
-	cache *cache.Cache, router *gin.Engine, prefix string) *Client {
+func NewClient(snClient *sn.Client, userClient *user.Client, prefix string) *Client {
 	client := &Client{
-		Client:  sn.NewClient(dsClient, logger, cache, router),
+		Client:  snClient,
 		User:    userClient,
-		Contest: contest.NewClient(dsClient, logger, cache),
+		Contest: contest.NewClient(snClient),
 	}
 	return client.addRoutes(prefix)
 }
