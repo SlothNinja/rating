@@ -121,14 +121,14 @@ func (r *CurrentRating) LoadKey(k *datastore.Key) error {
 
 type Common struct {
 	generated bool
-	Type      gtype.Type
-	R         float64
-	RD        float64
-	Low       float64
-	High      float64
-	Leader    bool
-	CreatedAt time.Time
-	UpdatedAt time.Time
+	Type      gtype.Type `json:"type"`
+	R         float64    `json:"r"`
+	RD        float64    `json:"rd"`
+	Low       float64    `json:"low"`
+	High      float64    `json:"high"`
+	Leader    bool       `json:"leader"`
+	CreatedAt time.Time  `json;"createdAt"`
+	UpdatedAt time.Time  `json:"updatedAt"`
 }
 
 func (r *CurrentRating) Rank() *glicko.Rank {
