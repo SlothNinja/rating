@@ -458,18 +458,27 @@ func (client *Client) MultiFor(c *gin.Context, u *user.User) (CurrentRatings, er
 	return client.GetAll(c, u.Key)
 }
 
+func (client *Client) getLocationID() string {
+	locationID := os.Getenv("LOCATION_ID")
+	if locationID != "" {
+		return locationID
+	}
+	client.Log.Warningf("LOCATION_ID environment variable not set -- using default")
+	return "us-central1"
+}
+
 func (client *Client) Update(c *gin.Context) {
 	client.Log.Debugf(msgEnter)
 	defer client.Log.Debugf(msgExit)
 
 	t := gtype.ToType[c.Param("type")]
 	projectID := os.Getenv("GOOGLE_CLOUD_PROJECT")
-	locationID := "us-central1"
+	locationID := client.getLocationID()
 	queueID := "default"
 
 	q := user.AllQuery(c).
 		KeysOnly()
-	it := client.DS.Run(c, q)
+	it := client.User.DS.Run(c, q)
 
 	for {
 		k, err := it.Next(nil)
