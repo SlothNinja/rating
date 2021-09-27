@@ -10,12 +10,12 @@ import (
 	"time"
 
 	"cloud.google.com/go/datastore"
+	"github.com/SlothNinja/client"
 	"github.com/SlothNinja/contest"
 	"github.com/SlothNinja/glicko"
 	"github.com/SlothNinja/log"
 	"github.com/SlothNinja/restful"
 	"github.com/SlothNinja/sn"
-	gtype "github.com/SlothNinja/type"
 	"github.com/SlothNinja/user"
 	"github.com/gin-gonic/gin"
 	"google.golang.org/api/iterator"
@@ -25,12 +25,12 @@ import (
 )
 
 type Client struct {
-	*sn.Client
+	*client.Client
 	User    *user.Client
 	Contest *contest.Client
 }
 
-func NewClient(snClient *sn.Client, userClient *user.Client, prefix string) *Client {
+func NewClient(snClient *client.Client, userClient *user.Client, prefix string) *Client {
 	client := &Client{
 		Client:  snClient,
 		User:    userClient,
@@ -121,14 +121,14 @@ func (r *CurrentRating) LoadKey(k *datastore.Key) error {
 
 type Common struct {
 	generated bool
-	Type      gtype.Type `json:"type"`
-	R         float64    `json:"r"`
-	RD        float64    `json:"rd"`
-	Low       float64    `json:"low"`
-	High      float64    `json:"high"`
-	Leader    bool       `json:"leader"`
-	CreatedAt time.Time  `json;"createdAt"`
-	UpdatedAt time.Time  `json:"updatedAt"`
+	Type      sn.Type   `json:"type"`
+	R         float64   `json:"r"`
+	RD        float64   `json:"rd"`
+	Low       float64   `json:"low"`
+	High      float64   `json:"high"`
+	Leader    bool      `json:"leader"`
+	CreatedAt time.Time `json;"createdAt"`
+	UpdatedAt time.Time `json:"updatedAt"`
 }
 
 func (r *CurrentRating) Rank() *glicko.Rank {
@@ -138,7 +138,7 @@ func (r *CurrentRating) Rank() *glicko.Rank {
 	}
 }
 
-func New(c *gin.Context, id int64, pk *datastore.Key, t gtype.Type, params ...float64) *Rating {
+func New(c *gin.Context, id int64, pk *datastore.Key, t sn.Type, params ...float64) *Rating {
 	r, rd := defaultR, defaultRD
 	if len(params) == 2 {
 		r, rd = params[0], params[1]
@@ -154,7 +154,7 @@ func New(c *gin.Context, id int64, pk *datastore.Key, t gtype.Type, params ...fl
 	return rating
 }
 
-func NewCurrent(pk *datastore.Key, t gtype.Type, params ...float64) *CurrentRating {
+func NewCurrent(pk *datastore.Key, t sn.Type, params ...float64) *CurrentRating {
 	r, rd := defaultR, defaultRD
 	if len(params) == 2 {
 		r, rd = params[0], params[1]
@@ -190,13 +190,13 @@ func singleError(e error) error {
 	return e
 }
 
-// Get Current Rating for gtype.Type and user associated with uKey
-func (client *Client) Get(c *gin.Context, uKey *datastore.Key, t gtype.Type) (*CurrentRating, error) {
+// Get Current Rating for sn.Type and user associated with uKey
+func (client *Client) Get(c *gin.Context, uKey *datastore.Key, t sn.Type) (*CurrentRating, error) {
 	ratings, err := client.GetMulti(c, []*datastore.Key{uKey}, t)
 	return ratings[0], singleError(err)
 }
 
-func (client *Client) GetMulti(c *gin.Context, uKeys []*datastore.Key, t gtype.Type) (CurrentRatings, error) {
+func (client *Client) GetMulti(c *gin.Context, uKeys []*datastore.Key, t sn.Type) (CurrentRatings, error) {
 	l := len(uKeys)
 	ratings := make(CurrentRatings, l)
 	ks := make([]*datastore.Key, l)
@@ -228,10 +228,10 @@ func (client *Client) GetMulti(c *gin.Context, uKeys []*datastore.Key, t gtype.T
 }
 
 func (client *Client) GetAll(c *gin.Context, uKey *datastore.Key) (CurrentRatings, error) {
-	l := len(gtype.Types)
+	l := len(sn.Types)
 	rs := make(CurrentRatings, l)
 	ks := make([]*datastore.Key, l)
-	for i, t := range gtype.Types {
+	for i, t := range sn.Types {
 		rs[i] = NewCurrent(uKey, t)
 		ks[i] = rs[i].Key
 	}
@@ -262,7 +262,7 @@ func (client *Client) GetAll(c *gin.Context, uKey *datastore.Key) (CurrentRating
 	return nil, merr
 }
 
-func (client *Client) GetFor(c *gin.Context, t gtype.Type) (CurrentRatings, error) {
+func (client *Client) GetFor(c *gin.Context, t sn.Type) (CurrentRatings, error) {
 	q := datastore.NewQuery(crKind).
 		Ancestor(user.RootKey()).
 		Filter("Type=", int(t)).
@@ -321,11 +321,11 @@ func (client *Client) Index(c *gin.Context) {
 	if err != nil {
 		client.Log.Debugf(err.Error())
 	}
-	t := gtype.ToType[c.Param("type")]
+	t := sn.ToType[c.Param("type")]
 	c.HTML(http.StatusOK, "rating/index", gin.H{
 		"Type":      t,
 		"Heading":   "Ratings: " + t.String(),
-		"Types":     gtype.Types,
+		"Types":     sn.Types,
 		"Context":   c,
 		"VersionID": sn.VersionID(),
 		"CUser":     cu,
@@ -336,14 +336,14 @@ func getAllQuery(c *gin.Context) *datastore.Query {
 	return datastore.NewQuery(crKind).Ancestor(user.RootKey())
 }
 
-func (client *Client) getFiltered(c *gin.Context, t gtype.Type, leader bool, offset, limit int32) (CurrentRatings, int64, error) {
+func (client *Client) getFiltered(c *gin.Context, t sn.Type, leader bool, offset, limit int32) (CurrentRatings, int64, error) {
 	q := getAllQuery(c)
 
 	if leader {
 		q = q.Filter("Leader=", true)
 	}
 
-	if t != gtype.NoType {
+	if t != sn.NoType {
 		q = q.Filter("Type=", int(t))
 	}
 
@@ -413,7 +413,7 @@ func (client *Client) getProjected(c *gin.Context, rs CurrentRatings) (CurrentRa
 	return ps, nil
 }
 
-func (client *Client) projected(c *gin.Context, ukey *datastore.Key, t gtype.Type, cs ...*contest.Contest) (*CurrentRating, error) {
+func (client *Client) projected(c *gin.Context, ukey *datastore.Key, t sn.Type, cs ...*contest.Contest) (*CurrentRating, error) {
 	client.Log.Debugf(msgEnter)
 	defer client.Log.Debugf(msgExit)
 
@@ -436,21 +436,21 @@ func (client *Client) projected(c *gin.Context, ukey *datastore.Key, t gtype.Typ
 	return r.Projected(ucs)
 }
 
-func (client *Client) GetProjected(c *gin.Context, ukey *datastore.Key, t gtype.Type) (*CurrentRating, error) {
+func (client *Client) GetProjected(c *gin.Context, ukey *datastore.Key, t sn.Type) (*CurrentRating, error) {
 	client.Log.Debugf(msgEnter)
 	defer client.Log.Debugf(msgExit)
 
 	return client.projected(c, ukey, t)
 }
 
-func (client *Client) GetProjectedWith(c *gin.Context, ukey *datastore.Key, t gtype.Type, cs []*contest.Contest) (*CurrentRating, error) {
+func (client *Client) GetProjectedWith(c *gin.Context, ukey *datastore.Key, t sn.Type, cs []*contest.Contest) (*CurrentRating, error) {
 	client.Log.Debugf(msgEnter)
 	defer client.Log.Debugf(msgExit)
 
 	return client.projected(c, ukey, t, cs...)
 }
 
-func (client *Client) For(c *gin.Context, u *user.User, t gtype.Type) (*CurrentRating, error) {
+func (client *Client) For(c *gin.Context, u *user.User, t sn.Type) (*CurrentRating, error) {
 	return client.Get(c, u.Key, t)
 }
 
@@ -471,7 +471,7 @@ func (client *Client) Update(c *gin.Context) {
 	client.Log.Debugf(msgEnter)
 	defer client.Log.Debugf(msgExit)
 
-	t := gtype.ToType[c.Param("type")]
+	t := sn.ToType[c.Param("type")]
 	projectID := os.Getenv("GOOGLE_CLOUD_PROJECT")
 	locationID := client.getLocationID()
 	queueID := "default"
@@ -513,7 +513,7 @@ func (client *Client) updateUser(c *gin.Context) {
 		return
 	}
 
-	t := gtype.ToType[c.Param("type")]
+	t := sn.ToType[c.Param("type")]
 
 	u, err := client.User.Get(c, uid)
 	if err != nil {
@@ -699,7 +699,7 @@ func (client *Client) JSONFilteredAction(c *gin.Context) {
 	client.Log.Debugf(msgEnter)
 	defer client.Log.Debugf(msgExit)
 
-	t := gtype.Get(c)
+	t := sn.Get(c)
 
 	var offset, limit int32 = 0, -1
 	if o, err := strconv.ParseInt(c.PostForm("start"), 10, 64); err == nil && o >= 0 {
@@ -814,7 +814,7 @@ func toCombined(c *gin.Context, us user.Users, rs, ps CurrentRatings, o int32, c
 	return table, nil
 }
 
-func (client *Client) IncreaseFor(c *gin.Context, u *user.User, t gtype.Type, cs []*contest.Contest) (*CurrentRating, *CurrentRating, error) {
+func (client *Client) IncreaseFor(c *gin.Context, u *user.User, t sn.Type, cs []*contest.Contest) (*CurrentRating, *CurrentRating, error) {
 	client.Log.Debugf(msgEnter)
 	defer client.Log.Debugf(msgExit)
 
@@ -848,7 +848,7 @@ func filterContestsFor(cs []*contest.Contest, pk *datastore.Key) (fcs []*contest
 }
 
 // createTask creates a new task in your App Engine queue.
-func createTask(projectID, locationID, queueID string, uid int64, t gtype.Type) (*taskspb.Task, error) {
+func createTask(projectID, locationID, queueID string, uid int64, t sn.Type) (*taskspb.Task, error) {
 	// Create a new Cloud Tasks client instance.
 	// See https://godoc.org/cloud.google.com/go/cloudtasks/apiv2
 	ctx := context.Background()
